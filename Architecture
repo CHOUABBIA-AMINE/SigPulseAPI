@@ -1,0 +1,407 @@
+# SigPulse: Signals Planning and Monitoring System
+
+**Project Foundation & Architectural Conception Document**
+
+## 1. Executive Summary
+
+### 1.1 Vision
+
+SigPulse is the unified operational command center for the organization's entire communications and signal infrastructure across Algerian territory. The vision is to eliminate operational silos by bridging financial acquisition, physical infrastructure deployment, active network telemetry, field maintenance, and **AI-driven strategic foresight** into a single, continuous, and highly secure lifecycle management platform. By leveraging a dynamic **Digital Twin**, the system transitions operations from reactive troubleshooting to proactive crisis management and predictive resilience.
+
+### 1.2 Goal
+
+To deploy an enterprise-grade, Domain-Driven Design (DDD) platform that enables the organization to proactively plan geographical network expansions, strictly govern the procurement of hardware, enforce multi-level security, actively monitor multi-format traffic (voice, video, data) in real-time, simulate catastrophic failures, and utilize artificial intelligence to drive strategic decision-making.
+
+### 1.3 Core Objectives
+
+1. **End-to-End Traceability:** Track every hardware component from the initial planning requisition, through formal tendering and procurement, to physical installation and eventual decommissioning.
+2. **Geographical & Mathematical Validation:** Mandate that every new edge site expansion connects to the main backbone with a mathematically validated Radio Frequency (RF) link budget and Line-of-Sight (LoS) clearance before hardware is purchased.
+3. **Zero-Trust Role Segregation:** Enforce strict operational boundaries between the Planning, Procurement, Maintenance, and Command units.
+4. **Resilient Telemetry:** Isolate high-frequency network monitoring from the relational inventory database to ensure system stability during massive network events.
+5. **Automated Incident Resolution:** Instantly cross-reference real-time telemetry drops with the static infrastructure topology to pinpoint root causes and execute redundant link failovers automatically.
+6. **Data-Driven Decision Making (AI):** Utilize machine learning models on historical telemetry and maintenance data to predict hardware failures, recommend vendor reliability, and optimize QoS routing.
+7. **Proactive Crisis Simulation:** Maintain a live "Digital Twin" of the infrastructure, allowing architects to inject synthetic faults to validate failover survivability before a real crisis occurs.
+
+---
+
+## 2. Functional Conception & Module Boundaries
+
+The system is organized into eight interconnected operational pillars acting as isolated bounded contexts. Modules do not share database schemas directly but communicate via synchronous internal API ports for read queries and an asynchronous Event Bus (Apache Kafka) for state mutations.
+
+```mermaid
+graph TD
+    UI[React JS / Mapbox UI] --> API[Spring Boot API Gateway & Security]
+    
+    subgraph Relational & Transactional Domain
+        IAM[Identity & Security]
+        PROC[Procurement & Acquisition]
+        PLAN[Topography & Planning]
+        CMDB[CMDB & Inventory]
+        TOPO[Topology & QoS]
+        ITSM[Maintenance & ITSM]
+    end
+    
+    subgraph High-Frequency & Analytical Domain
+        TELE[Telemetry & Monitoring]
+        AI[AI Analytics & Digital Twin]
+    end
+
+    API --> IAM
+    API --> PROC
+    API --> PLAN
+    API --> CMDB
+    API --> TOPO
+    API --> ITSM
+    API --> TELE
+    API --> AI
+    
+    %% Event Bus Integrations
+    TELE -.->|Kafka Events| TOPO
+    TELE -.->|Kafka Events| ITSM
+    PLAN -.->|Kafka Events| PROC
+    PROC -.->|Kafka Events| CMDB
+    
+    %% Databases
+    db1[(PostgreSQL Relational)]
+    db2[(TimescaleDB Time-Series)]
+    
+    IAM --> db1
+    PROC --> db1
+    PLAN --> db1
+    CMDB --> db1
+    TOPO --> db1
+    ITSM --> db1
+    
+    TELE --> db2
+    AI --> db1
+    AI --> db2
+
+```
+
+### 2.1 Identity & Security Module (IAM/MLS)
+
+* **Boundary:** Solely responsible for authentication, authorization, Multi-Level Security (MLS) clearances, cryptographic key management, and ABAC policy evaluations.
+
+### 2.2 Topography & Deployment Planning Module
+
+* **Boundary:** Controls GIS coordinates, Line-of-Sight (LoS) RF link budgets, civil infrastructure specs (towers, power), and site rollout project management. Enforces rules ensuring every new `EDGE_SITE` connects back to a `REGIONAL_DISTRIBUTION` or `BACKBONE_CORE` node.
+
+### 2.3 End-to-End Procurement Module
+
+* **Boundary:** Manages the statutory financial lifecycle: Purchase Requisitions, Budget Commitments, Tender Bidding, Contracts, Purchase Orders (POs), Goods Receipts (GRNs), and Invoices.
+
+### 2.4 CMDB & Warehouse Inventory Module
+
+* **Boundary:** The physical hardware ledger. Tracks `Asset` lifecycles, MAC addresses, modular chassis relationships, configuration baselines, and stock movements.
+
+### 2.5 Topology & QoS Module
+
+* **Boundary:** The logical networking plane. Maps active IP configurations, `RedundancyGroup` failover paths, layer-1/layer-2 transmission links, and partitions physical link capacity into hard Quality of Service (QoS) queues (`VOICE`, `VISIOPHONE`, `DATA`).
+
+### 2.6 Telemetry & Real-Time Monitoring Module
+
+* **Boundary:** High-frequency ingestor utilizing Spring Virtual Threads for ICMP/SNMP polling. Executes thousands of concurrent health checks and evaluates thresholds without locking the relational hub.
+
+### 2.7 ITSM & Maintenance Module
+
+* **Boundary:** Manages human field operations: Trouble Tickets, Field Work Orders, Preventive Maintenance schedules, and RMA returns to vendors.
+
+### 2.8 AI Analytics & Simulation Engine (Digital Twin)
+
+* **Boundary:** Isolated Python-based microservice. Ingests historical data to train predictive maintenance models, generate vendor reliability scores, and execute memory-heavy graph computations for synthetic fault simulations (e.g., simulating a blackout in a specific wilaya).
+
+---
+
+## 3. Data Entity Schema
+
+The persistence layer is modeled on a Domain-Driven Design (DDD) Hexagonal architecture.
+
+### 3.1 Enterprise Administration, Procurement & Logistics
+
+This layer handles the end-to-end statutory procurement lifecycle and the physical tracking of hardware.
+
+```mermaid
+erDiagram
+    %% PROCUREMENT
+    VendorJpaEntity ||--o{ ContractJpaEntity : "awarded"
+    PurchaseRequisitionJpaEntity ||--|{ RequisitionLineItemJpaEntity : "contains"
+    PurchaseRequisitionJpaEntity ||--|| BudgetCommitmentJpaEntity : "funds"
+    ContractJpaEntity ||--o{ PurchaseOrderJpaEntity : "governs"
+    PurchaseOrderJpaEntity ||--|{ POLineItemJpaEntity : "specifies"
+    PurchaseOrderJpaEntity ||--o{ GoodsReceiptNoteJpaEntity : "delivers"
+    GoodsReceiptNoteJpaEntity ||--|| QualityInspectionReportJpaEntity : "qa_check"
+    PurchaseOrderJpaEntity ||--o{ VendorInvoiceJpaEntity : "invoices"
+    VendorInvoiceJpaEntity ||--|| PaymentLiquidationJpaEntity : "pays"
+
+    %% CMDB CROSSOVER
+    POLineItemJpaEntity }o--|| EquipmentModelJpaEntity : "requests"
+    QualityInspectionReportJpaEntity ||--o{ AssetJpaEntity : "provisions"
+    EquipmentModelJpaEntity ||--o{ AssetJpaEntity : "defines_spec"
+    AssetJpaEntity ||--|{ InterfacePortJpaEntity : "exposes"
+    AssetJpaEntity ||--o{ ConfigurationBaselineJpaEntity : "configured_by"
+
+    PurchaseRequisitionJpaEntity {
+        UUID id PK
+        String requisition_number UK
+        RequisitionStatus status
+    }
+    BudgetCommitmentJpaEntity {
+        UUID id PK
+        String budget_line_code
+        BigDecimal committed_amount
+    }
+    ContractJpaEntity {
+        UUID id PK
+        String contract_number UK
+        BigDecimal contract_value
+    }
+    PurchaseOrderJpaEntity {
+        UUID id PK
+        POStatus status
+    }
+    GoodsReceiptNoteJpaEntity {
+        UUID id PK
+        Instant received_at
+    }
+    QualityInspectionReportJpaEntity {
+        UUID id PK
+        InspectionVerdict verdict
+    }
+    EquipmentModelJpaEntity {
+        UUID id PK
+        String manufacturer
+        String model_name
+    }
+    AssetJpaEntity {
+        UUID id PK
+        String serial_number UK
+        AssetLifecycleState lifecycle_state
+    }
+    InterfacePortJpaEntity {
+        UUID id PK
+        String port_identifier
+        PhysicalPortMedium medium_type
+    }
+
+```
+
+### 3.2 Topography, Logical Topology & QoS
+
+This layer maps the geographical deployments, RF frequency clearances, and logical network routes.
+
+```mermaid
+erDiagram
+    %% TOPOGRAPHY & TOPOLOGY
+    SiteLocationJpaEntity ||--|| CivilInfrastructureJpaEntity : "contains"
+    SiteLocationJpaEntity ||--o{ NetworkNodeJpaEntity : "hosts_node"
+    AssetJpaEntity ||--|| NetworkNodeJpaEntity : "operates_as"
+    InterfacePortJpaEntity ||--o{ NetworkLinkJpaEntity : "connects"
+    NetworkLinkJpaEntity ||--o{ LinkBudgetProfileJpaEntity : "rf_validated_by"
+    LinkBudgetProfileJpaEntity ||--o| FrequencyClearanceJpaEntity : "licensed_by"
+    NetworkLinkJpaEntity ||--o{ RedundancyGroupJpaEntity : "primary/backup"
+
+    %% QOS
+    ServiceProfileJpaEntity ||--o{ TrafficAllocationJpaEntity : "allocates"
+    NetworkLinkJpaEntity ||--|{ TrafficAllocationJpaEntity : "carries"
+
+    SiteLocationJpaEntity {
+        UUID id PK
+        String site_code UK
+        BigDecimal latitude
+        BigDecimal longitude
+        InfrastructureTier tier
+    }
+    NetworkNodeJpaEntity {
+        UUID id PK
+        String management_ip UK
+        OperationalState state
+    }
+    NetworkLinkJpaEntity {
+        UUID id PK
+        TransmissionMedium medium
+        LinkOperationalStatus status
+    }
+    LinkBudgetProfileJpaEntity {
+        UUID id PK
+        BigDecimal tx_power_dbm
+        boolean los_validated
+    }
+    RedundancyGroupJpaEntity {
+        UUID id PK
+        boolean is_failover_active
+    }
+    ServiceProfileJpaEntity {
+        UUID id PK
+        CommunicationFormat format_category
+        int dscp_priority_tag
+    }
+    TrafficAllocationJpaEntity {
+        UUID id PK
+        BigDecimal guaranteed_bandwidth_mbps
+    }
+
+```
+
+### 3.3 Active Operations, Telemetry & ITSM
+
+Handles high-frequency telemetry (TimescaleDB), automatic anomaly alerting, and corrective field maintenance.
+
+```mermaid
+erDiagram
+    %% TELEMETRY & ALARMS
+    MonitoringProbeAgentJpaEntity ||--o{ MonitoringThresholdJpaEntity : "evaluates"
+    MetricDefinitionJpaEntity ||--o{ MonitoringThresholdJpaEntity : "monitors"
+    MonitoringThresholdJpaEntity ||--o{ ActiveAlarmJpaEntity : "triggers"
+    MetricDefinitionJpaEntity ||--o{ NodeTelemetryHypertable : "logs"
+    NetworkNodeJpaEntity ||--o{ ActiveAlarmJpaEntity : "experiences"
+
+    %% MAINTENANCE & ITSM
+    ActiveAlarmJpaEntity ||--o{ TroubleTicketJpaEntity : "escalated_to"
+    TroubleTicketJpaEntity ||--o{ FieldWorkOrderJpaEntity : "resolved_by"
+    FieldWorkOrderJpaEntity ||--|| FieldInterventionReportJpaEntity : "reports"
+    FieldWorkOrderJpaEntity ||--o{ SparePartConsumptionJpaEntity : "consumes"
+    RMAOrderJpaEntity ||--o{ SparePartConsumptionJpaEntity : "returns_defective"
+
+    MetricDefinitionJpaEntity {
+        UUID id PK
+        String metric_code UK
+    }
+    MonitoringThresholdJpaEntity {
+        UUID id PK
+        BigDecimal critical_threshold
+    }
+    ActiveAlarmJpaEntity {
+        UUID id PK
+        AlarmSeverity severity
+        AlarmLifecycleState lifecycle_state
+    }
+    NodeTelemetryHypertable {
+        timestamptz timestamp PK
+        UUID node_id FK
+        BigDecimal metric_value
+    }
+    TroubleTicketJpaEntity {
+        UUID id PK
+        String ticket_number UK
+        TicketSeverity severity
+        TicketStatus status
+    }
+    FieldWorkOrderJpaEntity {
+        UUID id PK
+        WorkOrderStatus status
+    }
+    FieldInterventionReportJpaEntity {
+        UUID id PK
+        boolean service_restored_verified
+    }
+    SparePartConsumptionJpaEntity {
+        UUID id PK
+        UUID defective_asset_id FK
+        UUID replacement_asset_id FK
+    }
+    RMAOrderJpaEntity {
+        UUID id PK
+        RMAType rma_type
+        RMAStatus status
+    }
+
+```
+
+---
+
+## 4. Core Integration & Process Flows
+
+Data fluidity across the Hexagonal architecture is managed via synchronous internal API ports for reads and the Kafka Event Bus for state mutations.
+
+### 4.1 Validated Deployment to Hardware Ingestion (Procurement Flow)
+
+From the moment architects plan a site to the moment hardware enters the warehouse.
+
+```mermaid
+sequenceDiagram
+    participant Plan as Topography & Planning
+    participant CMDB as CMDB & Inventory
+    participant Kafka as Event Bus (Kafka)
+    participant Proc as Procurement
+    participant Whse as Warehouse Operations
+
+    Plan->>CMDB: Sync Query: Check AssetAvailabilityPort
+    CMDB-->>Plan: Return Shortfall (Missing hardware)
+    Plan->>Kafka: Publish SiteBOMValidatedEvent
+    Kafka-->>Proc: Consume Event
+    Proc->>Proc: Generate Purchase Requisition & Tender
+    Note over Proc: Tender Awarded & PO Issued
+    Proc->>Whse: Await physical delivery
+    Whse->>Proc: Submit GoodsReceiptNote & QA Inspection
+    Proc->>Kafka: Publish GoodsReceiptInspectedEvent
+    Kafka-->>CMDB: Consume Event
+    CMDB->>CMDB: Provision new Asset entities (Status: IN_STOCK)
+
+```
+
+### 4.2 Autonomous Telemetry to Failover & ITSM
+
+A critical, low-latency automated flow requiring microsecond interactions to protect `VOICE` and `VISIOPHONE` QoS queues.
+
+```mermaid
+sequenceDiagram
+    participant Telemetry as Telemetry & Monitoring
+    participant TSDB as TimescaleDB
+    participant Topo as Topology & QoS
+    participant Kafka as Event Bus (Kafka)
+    participant ITSM as Maintenance Module
+
+    Telemetry->>TSDB: Ingest NodeMetrics (High Frequency)
+    Telemetry->>Telemetry: Evaluate Threshold (e.g., Loss of Signal)
+    Telemetry->>Topo: Sync Query: RedundancyPathLookupPort(LinkID)
+    Topo-->>Telemetry: Return Secondary Backup Link Details
+    Telemetry->>Telemetry: Execute Automated Reroute Script
+    Telemetry->>Kafka: Publish LinkFailoverExecutedEvent
+    
+    par Update Topology State
+        Kafka-->>Topo: Consume Event
+        Topo->>Topo: Update RedundancyGroup (is_failover_active = true)
+    and Dispatch Maintenance
+        Kafka-->>ITSM: Consume Event
+        ITSM->>ITSM: Generate Critical TroubleTicket
+        ITSM->>ITSM: Dispatch FieldWorkOrder to NOC
+    end
+
+```
+
+### 4.3 AI Analytics & Crisis Simulation (Digital Twin)
+
+The proactive process allowing leadership to test survivability before real-world events occur.
+
+```mermaid
+sequenceDiagram
+    participant Cmd as Command Unit
+    participant AI as AI & Simulation Engine
+    participant DBs as Relational & TSDB Hubs
+    participant Kafka as Event Bus (Kafka)
+    participant Plan as Topography & Planning
+
+    Cmd->>AI: Initiate SimulationScenario (e.g., Regional Blackout)
+    AI->>DBs: Pull live Topology Graph & Historical Metrics
+    DBs-->>AI: Return Digital Twin baseline
+    AI->>AI: Inject Synthetic Faults (Sever virtual links)
+    AI->>AI: Compute Cascading Impacts & QoS bottlenecks
+    AI->>Kafka: Publish SimulationResultGeneratedEvent
+    Kafka-->>Plan: Consume Event
+    Plan->>Plan: Flag vulnerable sites for physical redundancy upgrades
+
+```
+
+---
+
+## 5. Technology Stack & Infrastructure Rules
+
+| Domain | Core Technology | Architectural Purpose |
+| --- | --- | --- |
+| **Client Presentation** | React JS (TypeScript) | Delivers a Single Page Application (SPA) utilizing Mapbox for GIS planning and WebSockets for pushing millisecond-latency telemetry alerts to operators. |
+| **API & Business Logic** | Spring Boot (Java) | Serves as the central engine enforcing unit-based security (`Planning`, `Procurement`, `Maintenance`), executing complex topology rules, and managing PO transitions via Spring State Machine. |
+| **Telemetry Worker** | Spring WebFlux / Virtual Threads | Executes thousands of non-blocking, concurrent network polling requests directly from within the Spring ecosystem. |
+| **AI & Sim Runtime** | Python (FastAPI, PyTorch) | Microservice dedicated strictly to graph computations, statistical reliability scoring, and predictive forecasting. |
+| **Relational Hub** | PostgreSQL (Spring Data JPA) | Enforces strict referential integrity for complex hardware inventories, geographical coordinates, vendor contracts, and physical interface connections. |
+| **Monitoring Hub** | TimescaleDB | A time-series database optimized for high-volume, append-only writes. Ingests timestamped node metrics without locking PostgreSQL. |
+| **Event Broker** | Apache Kafka | Functions as the central nervous system, consuming module events and instantly broadcasting failover commands, PO generation, and simulation updates. |
